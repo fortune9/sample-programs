@@ -1,3 +1,6 @@
+import logging;
+
+logger=logging.getLogger();
 
 def outside_method():
     print("I am in outside of the class");
@@ -6,6 +9,8 @@ def outside_method():
 class myClass:
     def __init__(self):
         self.name="I am an instance"+self.__class__.__name__;
+        logger.warning("This is a logger defined in module");
+
 
     def inside_method(self):
         print("I ({0}) am inside of the class".
