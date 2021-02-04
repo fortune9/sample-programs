@@ -14,9 +14,15 @@ document, which can be viewed as html at github directly.
 
 ## Requirements
 
+<<<<<<< HEAD
   - latest [*rmarkdown*](https://rmarkdown.rstudio.com/) package: the
     *github\_document* format is only available in recent *rmarkdown*
     package.
+=======
+  - latest (*rmarkdown*)\[<https://rmarkdown.rstudio.com/>\] package:
+    the *github\_document* format is only available in recent
+    *rmarkdown* package.
+>>>>>>> af399f27462052ea9540a4a17df93f3ba7cd7544
 
 ## The document
 
