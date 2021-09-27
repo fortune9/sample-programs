@@ -127,3 +127,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# nextflow run output
+/nextflow/**/work/
+/nextflow/**/results/
+/nextflow/**/.nextflow
+/nextflow/**/.nextflow.*
+
