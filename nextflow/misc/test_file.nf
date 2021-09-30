@@ -43,9 +43,11 @@ process view_file {
     """
 }
 
+// combine all output and view it
 line_count_ch
-    .subscribe {
-        print it;
-        print it.text
-        }
+//    .collect() { it.text } // return a list as a whole
+//    .map() { it.text } // return each element separately
+    .flatMap() { it.text } // same as above
+    .collectFile(name: 'final_line_count.txt', newLine: true)
+    .view()
 
