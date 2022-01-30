@@ -9,6 +9,8 @@ process executor_who {
     """
     if [[ ${task.executor} == "awsbatch" ]]; then
         echo I am in awsbatch
+        echo `which diff_meth`
+        echo ${task.container}
     else
         echo I am in ${task.executor}
     fi
