@@ -9,6 +9,9 @@ process print_msg {
 
     script:
     println x
+    """
+    echo "Received: $x"
+    """
 }
 
 process print_msg1 {
