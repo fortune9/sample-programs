@@ -17,6 +17,8 @@ params {
     }
 */
 
+params.label = null
+
 // The ways to access scope variables
 // if in string, '$' is required
 println "$params.L11"
@@ -35,12 +37,17 @@ if("$workflow.profile".contains("test")) {
 }
 
 process test_proc {
+    // one can use parameter to control the label
+    // both of the following work
+    //label "${ params.label == null ? 'basic' : params.label }"
+    label params.label == null ? 'basic' : params.label 
     echo true
-    cpus { "$workflow.profile".contains("test") ? 1 : 2}
+    //cpus { "$workflow.profile".contains("test") ? 1 : 2}
 
     script:
     """
-    echo "This is a test process"
+    echo "This is a test process: ${task.label}"
     echo "CPUS: ${task.cpus}"
+    echo "MEM: ${task.memory}"
     """
 }
