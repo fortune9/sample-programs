@@ -1,20 +1,30 @@
 
-nextflow.enable.dsl=2
+//nextflow.enable.dsl=2
 
-// this parameter is defined in including parameter too.
+// this parameter is defined in including script too.
 params.globalInput="global input in module"
 // the following parameter is module-specific, so need use addParams
 // in including script
 params.moduleInput="module input"
 params.moduleInputNoChange="module input no change"
 
-workflow sub_wf1 {
-    log.info """
-    In workflow sub_wf1:
+process print_info {
+    echo true
+
+    script:
+    """
+    cat <<EOF
+    In print_info:
     globalInput: ${params.globalInput}
     moduleInput: ${params.moduleInput}
     moduleInputNoChange: ${params.moduleInputNoChange}
+    EOF
     """
+    
+}
+
+workflow sub_wf1 {
+    print_info()
 }
 
 

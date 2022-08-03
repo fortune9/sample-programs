@@ -1,6 +1,6 @@
-params.msg="This is default msg in msg.nf"
+params.msG="This is default msg in msg.nf"
 
-ch_msg = Channel.value(params.msg)
+//ch_msg = Channel.value(params.msg)
 
 process print_msg {
     echo true
@@ -19,7 +19,11 @@ process print_msg1 {
 
     script:
     """
-    echo ${params.msg}
+    echo ${params.msG}
     """
+}
+
+workflow print_wf {
+    print_msg1()
 }
 

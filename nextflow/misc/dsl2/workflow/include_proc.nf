@@ -21,10 +21,17 @@ include { print_msg1 as msg2 } from \
         msg: "workflow msg2"
         )
 
+// also include a workflow
+include { print_wf } from \
+    '../process/msg.nf' addParams (
+        msg: "wf: msg to workflow"
+        )
+
 
 workflow {
     msg0()
     msg1()
     msg2()
+    print_wf()
 }
 
