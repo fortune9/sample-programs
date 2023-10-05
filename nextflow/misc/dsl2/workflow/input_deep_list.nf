@@ -32,7 +32,7 @@ process read_deep_list {
     val list
 
     script:
-    println 'deep: ' + list
+    println 'deep: ' + list + ' is ' + list.getClass()
     """
     echo 'Deep: $list'
     for i in $list
