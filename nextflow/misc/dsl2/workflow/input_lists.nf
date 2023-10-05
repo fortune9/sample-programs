@@ -14,6 +14,7 @@ process count_lines {
     input:
     val id
     path fileList
+    path 'localfile*.txt'
 
     script:
     println fileList.getClass()
@@ -25,6 +26,8 @@ process count_lines {
     do
         echo $id for \$f: `wc -l "\$f"` # quote the filename in case spaces in it
     done
+    echo 'Fixed input file names'
+    echo $id: localfile*.txt
     """
 }
 
@@ -45,5 +48,5 @@ workflow {
     //count_lines(params.id, ch_file_list)
     // files as a list
     println "Rerun by using files as a list"
-    count_lines(params.id, ch_file_list.collect())
+    count_lines(params.id, ch_file_list.collect(), ch_file_list.collect())
 }
