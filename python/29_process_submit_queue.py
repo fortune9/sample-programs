@@ -6,7 +6,7 @@ import time
 import multiprocessing
 
 # Create a queue with a maximum size of 5
-max_queue_size = 8
+max_queue_size = 5
 q = multiprocessing.Queue(maxsize=max_queue_size)
 
 def producer():
@@ -30,6 +30,22 @@ def consumer(consumer_id):
         time.sleep(2)  # Simulate processing time for each item
     print(f"Consumer {consumer_id} finished.")
 
+
+def consume(item):
+    print(f"Consumer consumed: {item}")
+    time.sleep(2)  # Simulate processing time for each item
+    return f"Done {item}"
+
+def limited_consumer(executor, *args, **kwargs):
+    while True:
+        item = q.get()
+        if item is None:  # Check for the sentinel to stop consuming
+            break
+        future=executor.submit(consume, item) # this doesn't block
+        consumer_futures.append(future)
+        #print(f"In limited_consumer: {future.result()}")
+    print("Limited consumer done")
+
 # Number of parallel consumers
 consumer_count = 3
 
@@ -39,16 +55,18 @@ producer_process = multiprocessing.Process(target=producer)
 # Start the producer
 producer_process.start()
 
+consumer_futures = []
 # Start the consumers using a process pool
 with concurrent.futures.ProcessPoolExecutor(max_workers=consumer_count) as executor:
-    consumer_futures = [executor.submit(consumer, i) for i in range(consumer_count)]
+    #consumer_futures = [executor.submit(consumer, i) for i in range(consumer_count)]
+    limited_consumer(executor)
 
     # Wait for all consumers to finish
     for future in concurrent.futures.as_completed(consumer_futures):
-        future.result()
+        print(f"Collecting results: {future.result()}")
 
 # Wait for the producer to finish
 producer_process.join()
 
-print("This works in limiting the number of submitted jobs")
+print("This setting can't limit the number of submitted tasks")
 
