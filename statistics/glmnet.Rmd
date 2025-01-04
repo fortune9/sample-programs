@@ -1,0 +1,385 @@
+---
+title: "A tutorial on glmnet"
+author: "Zhenguo Zhang"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  github_document:
+    toc: yes
+    toc_depth: 3
+  html_document:
+    toc: yes
+    toc_depth: '3'
+    df_print: paged
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=F, warning = F, fig.width = 7, fig.height = 7)
+library(glmnet)
+library(knitr)
+```
+
+
+## Statistical models
+
+In addition to the models show below, one can also specify other more generalized
+model in any GLM family by the function *family()*.
+
+
+### Guassian linear model
+
+
+```{r}
+data(QuickStartExample)
+x <- QuickStartExample$x
+y <- QuickStartExample$y
+```
+
+where x is matrix with dimension `r dim(x)` and y is a one-column matrix with response. And we
+fit a linear model using the following:
+
+```{r}
+fit<-glmnet(x,y)
+```
+
+We can plot the coefficient of each variable against the L1 norm 
+(sum of all the absolute values of coefficients) when $\lambda$
+varies as follows:
+
+```{r}
+plot(fit, label=T)
+```
+
+Each line represents a variable (total 20 variables), and it shows that when the
+the L1 Norm changes (driven by $\ambda$ changes), how the coefficients change.
+
+To show how the modeling goes along with the changes of $\lambda$, one can print
+out the fitted object:
+
+```{r}
+print(fit)
+```
+
+where the first column shows the number of non-zero coefficients (df),
+the percentage of deviance explained by the model and the corresponding
+$\lambda$. By default, glmnet fits models by using 100 values of $\lambda$,
+but stops when the deviance changes from one $\lambda$ to the next is negligible.
+According to the default internal settings, the computations stop if either the fractional change in
+deviance down the path is less than 10^-5 or the fraction of explained deviance reaches 0.999
+
+To get the coefficients for the model at a certain $\lambda$, one can run
+($\lambda$ is given using the parameter *s*):
+
+```{r}
+coef(fit, s=0.2)
+```
+
+Note that if the given $\lambda$ was not used in the fitting,
+then glmnet will calculate by linear interpolating nearby $\lambda$s,
+unless the parameter *exact=TRUE* is specified. Note that with *exact = TRUE*,
+one has to supply by named
+argument any data that was used in creating the original fit, in this case x and y,
+because refittings will happen at the specified lambda, like:
+
+```r
+coef(fit, s=0.2, exact=TRUE, x=x, y=y)
+```
+
+To predict new values by using models at certain $\lambda$, we can do the following:
+
+```{r}
+set.seed(123)
+newX<-matrix(rnorm(10*20), ncol=20)
+predict(fit, newx = newX, s=c(0.1,0.2))
+```
+
+Normally, glmnet returns many models for users, to choose one, we can use
+cross-validation, and *cv.glmnet* is the function which can be used to
+achieve this:
+
+```{r}
+cvfit<-cv.glmnet(x,y)
+```
+
+This function returns an object, containing all the components of cross-validated
+fits. To show how the cross-validation errors change over $\lambda$, one can
+plot it:
+
+```{r}
+plot(cvfit)
+```
+
+in which, two dashed vertical lines mark *lambda.min* and *lambda.1se*, where
+the lambda values give the minimum cross-validation error and that within one
+standard error of the minimum, respectively.
+
+To get the coefficients of the model with minimum $\lambda$, run the following
+
+```{r}
+coef(cvfit, s = "lambda.min")
+```
+
+### Multi-response guassian family
+
+This model is specified by using the parameter *family="mgaussian"*.
+And the respone variable is not a vector, but a matrix with each column
+corresponding to one response variable.
+
+
+```{r}
+data(MultiGaussianExample)
+x <- MultiGaussianExample$x
+y <- MultiGaussianExample$y
+mfit <- glmnet(x, y, family = "mgaussian")
+```
+
+Here x and y have dimensions `r dim(x)` and `r dim(y)`, respectively.
+
+To plot the coefficients' L2-Norm (note for each variable, the coefficients are
+a vector corresponding to each response variable) over lambda, one can run the 
+following:
+
+```{r}
+plot(mfit, xvar = "lambda", label = TRUE, type.coef = "2norm")
+```
+
+
+We can extract coefficients and other predictions as usual:
+
+```{r}
+predict(mfit, newx = x[1:5,], s = c(0.1, 0.01))
+```
+
+### Logistic regression model
+
+This model is specified with parameter *family="binomial"*.
+
+The objective function for logistic regression is the penalized negative binomial log-likelihood.
+
+For binomial logistic regression, the response
+variable y should be either a binary vector, a factor with two levels, or a two-column matrix of counts or
+proportions. 
+
+```{r}
+data(BinomialExample)
+x <- BinomialExample$x
+y <- BinomialExample$y
+```
+
+The values of y has the following distribution:
+
+```{r}
+kable(table(y))
+```
+
+
+```{r}
+fit <- glmnet(x, y, family = "binomial")
+plot(fit, xvar="lambda", label=T)
+```
+
+The predictions of class labels and probabilities are as follows:
+
+```{r}
+predict(fit, newx = x[1:5,], type = "class", s = c(0.05, 0.01))
+```
+
+```{r}
+predict(fit, newx = x[1:5,], type = "response", s = c(0.05, 0.01))
+```
+
+And the coefficients
+
+```{r}
+predict(fit, newx = x[1:5,], type = "coefficients", s = c(0.05, 0.01))
+```
+
+When using *cv.glmnet*, the parameter *type.measure* has the following meanings:
+
+- “mse” uses squared loss.
+- “deviance” uses actual deviance, different from linear guassian models
+- “mae” uses mean absolute error.
+- “class” gives misclassification error.
+- “auc” (for two-class logistic regression ONLY) gives area under the ROC curv
+
+First, use misclassification error as criterion for cross-validation,
+
+```{r}
+cvfit <- cv.glmnet(x, y, family = "binomial", type.measure = "class")
+plot(cvfit)
+```
+
+
+And then try using AUC as criterion:
+
+```{r}
+cvfit <- cv.glmnet(x, y, family = "binomial", type.measure = "auc")
+plot(cvfit)
+```
+
+### Multinomial model
+
+This model is specified by providing *family="multinomial"*. It extends the binomial
+model by allowing classes of more than two.
+
+```{r}
+data(MultinomialExample)
+x <- MultinomialExample$x
+y <- MultinomialExample$y
+```
+
+The values of y has the following distribution:
+
+```{r}
+kable(table(y))
+```
+
+```{r}
+fit <- glmnet(x, y, family = "multinomial", type.multinomial = "grouped")
+plot(fit, xvar = "lambda", label = TRUE, type.coef = "2norm")
+```
+
+Here the parameter *type.multinomial* determine whether grouped lasso penalty
+can be used in the model or not, which also depends on another parameter *q*.
+
+And the cross-validation implementation looks like this:
+
+```{r}
+cvfit <- cv.glmnet(x, y, family = "multinomial", type.multinomial = "grouped", type.measure = "class")
+plot(cvfit)
+```
+
+### Poisson regression model
+
+This model is activated via the parameter *family = "poisson"*.
+
+Like Gaussian and binomial models, Poisson model is a member of exponential
+family distribution, so its objective function is to maximize
+log-likelihood of the observations.
+
+Now let's see an example:
+
+```{r}
+data(PoissonExample)
+x <- PoissonExample$x
+y <- PoissonExample$y
+```
+
+And the counts of each y value is as follows:
+
+```{r}
+table(y)
+```
+
+The fit of the model is as follows
+
+```{r}
+fit <- glmnet(x, y, family = "poisson")
+plot(fit)
+```
+
+Note that one can specify a parameter *offset* with the length equal to the
+number of observations to account for the time, area, etc when sampling
+Poisson variables. Check the function for more details.
+
+For prediction, when *type="response"*, the returned value are fitted mean,
+
+```{r}
+predict(fit, newx = x[1:5,], type = "response", s = c(0.1,1))
+```
+## Assessing models
+
+*glmnet* provides helpful functions for one to calculate performance measures
+along different lambda values,
+such as 
+
+- *assess.glmnet*: produces all the different performance measures provided by cv.glmnet for each of the model families. For cross-validation objects, it reports the performance at the optimal lambda
+  value (default is lambda.1se); and one can provide different lambda values using the parameter *s*.
+- *roc.glmnet*: produces for a single vector a two column matrix with columns TPR and FPR (true positive rate and false positive rate). If more than one prediction are provided, then a list
+  of such matrix is returned.
+- *confusion.glmnet*: produces a confusion matrix tabulating the classification results
+
+Users can find the measures for each model by using the function *glmnet.measures()*:
+
+```{r}
+glmnet.measures()
+```
+
+Here are some examples:
+
+```{r}
+data(BinomialExample)
+x <- BinomialExample$x
+y <- BinomialExample$y
+itrain <- 1:70
+fit <- glmnet(x[itrain, ], y[itrain], family = "binomial", nlambda = 5)
+assess.glmnet(fit, newx = x[-itrain, ], newy = y[-itrain])
+```
+
+For the second lambda value at `r fit$lambda[2]`, the roc.glmnet function
+returns the following matrix:
+
+```{r}
+roc.glmnet(fit, newx = x[-itrain, ], newy = y[-itrain])[[2]]
+```
+
+And similarly, we can also return the confusion matrix for the 2nd lambda:
+
+```{r}
+tb<-confusion.glmnet(fit, newx = x[-itrain, ], newy = y[-itrain])[[2]]
+print(tb)
+```
+
+## Parameters
+
+### Function *glmnet*
+
+Parameter | Description
+--- | ---
+alpha | set to 1 for lasso regression (default) and 0 for ridge regression. A value in between leads to a combination of the two regressions.
+weights | a vector of weights for each sample, internally scaled to N (the sample size)
+nlambda | the number of $\lambda$ values, default is 100
+lambda | a user-provided $\lambda$ sequence if not preferring autogenerated $\lambda$s.
+standardize | if TRUE (default), x variables are standardized before fitting, but the coefficients are always returned on the original scale.
+upper.limits | the upper limit for coefficients, so assigned coefficients won't be greater than that. Can set different limits for different predictors by providing a vector.
+lower.limits | the lower limit for coefficients
+penalty.factor | specify penalty factors for each predictor variable; a larger value leads to a higher penalty. Set to zero to include a variable in model all the time.
+exclude | indices of variables to exclude from models, whose coefficients will always be zeros. A function to return TRUE/FALSE is also accepted.
+intercept | if set to FALSE, intercept is removed from models.
+trace.it | show progress bar. To make it permanent, try glmnet.control(itrace=1)
+
+
+### Function *predict*
+
+Parameter | Description
+--- | ---
+newx | new data matrix as predictors
+type | the returned value type: *link* for fitted value, *response* is the same for Gaussian model and provides probabilities for binomial/multinomial models, *coefficients* for coefficients at given
+lambdas.
+
+
+### Function *plot*
+
+Parameter | Description
+--- | ---
+xvar | the variable to plot on x-axis, *norm* for L1-norm of the coefficients; *lambda* for log-lambda; dev for deviance%.
+label | if TRUE, each curves are labeled by its predictor.
+
+### Function *cv.glmnet*
+
+Parameter | Description
+--- | ---
+nfolds | the number of folds
+foldid | user-provided folds, a vector of integers marking the fold belong for each sample
+type.measure | the loss metric used for cross-validation, can be one of "mse", "deviance", "class", "auc", "mae", "C". "C" is for Harrel's concordance and only available for cox models. "mse" and "mae" stand for mean squared error and mean absolute error, respectively.
+keep | if TRUE, the fitted values in each fold cross-validation are returned for each lambda.
+
+
+### Other functions
+
+- makeX: take a data.frame and make a model matrix for use as input for glmnet
+
+- bigGlm: fit a big unpenalized generalized linear model.
+
+
+
