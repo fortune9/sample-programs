@@ -3,6 +3,11 @@ title: "Sample github_document"
 author: "Zhenguo Zhang"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
+  prettydoc::html_pretty:
+    theme: hpstr
+    toc: yes
+    toc_depth: '3'
+    df_print: paged
   github_document:
     toc: yes
     toc_depth: 3
