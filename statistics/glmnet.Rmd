@@ -296,7 +296,8 @@ such as
 - *assess.glmnet*: produces all the different performance measures provided by cv.glmnet for each of the model families. For cross-validation objects, it reports the performance at the optimal lambda
   value (default is lambda.1se); and one can provide different lambda values using the parameter *s*.
 - *roc.glmnet*: produces for a single vector a two column matrix with columns TPR and FPR (true positive rate and false positive rate). If more than one prediction are provided, then a list
-  of such matrix is returned.
+  of such matrix is returned. It can accept both predicted values and
+  fitted glmnet models
 - *confusion.glmnet*: produces a confusion matrix tabulating the classification results
 
 Users can find the measures for each model by using the function *glmnet.measures()*:
@@ -372,7 +373,7 @@ Parameter | Description
 nfolds | the number of folds
 foldid | user-provided folds, a vector of integers marking the fold belong for each sample
 type.measure | the loss metric used for cross-validation, can be one of "mse", "deviance", "class", "auc", "mae", "C". "C" is for Harrel's concordance and only available for cox models. "mse" and "mae" stand for mean squared error and mean absolute error, respectively.
-keep | if TRUE, the fitted values in each fold cross-validation are returned for each lambda.
+keep | if TRUE, the fitted values in each fold cross-validation are returned for each lambda. Note these values are computed using the trained model during cross-validation for the observation in the test fold.
 
 
 ### Other functions
