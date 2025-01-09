@@ -1,0 +1,150 @@
+---
+title: "A tutorial on caret - glmnet"
+author: "Zhenguo Zhang"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  github_document:
+    toc: yes
+    toc_depth: 3
+  html_document:
+    toc: yes
+    toc_depth: '3'
+    df_print: paged
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=F, warning = F, fig.width = 7, fig.height = 7)
+library(glmnet)
+library(knitr)
+library(caret)
+library(ggplot2)
+```
+
+This tutorial shows how to build statistical models using the glmnet method
+via the [caret](https://topepo.github.io/caret/) package.
+
+Here we train the LASSO model using both cv.glmnet (a builtin cross-validation
+method in the package glmnet) and caret,
+so we can see whether the same results can be obtained.
+
+We will use the *diamonds* dataset coming with the package *ggplot2*, which
+can also be download from https://vincentarelbundock.github.io/Rdatasets/csv/ggplot2/diamonds.csv.
+
+```{r}
+dat<-read.csv("https://vincentarelbundock.github.io/Rdatasets/csv/ggplot2/diamonds.csv")
+# remove non-data columns
+dat$rownames<-NULL
+head(dat)
+```
+
+Now, let's split the data in training and testing part, and convert categorical
+variables into dummy variables:
+
+```{r}
+set.seed(123)
+trainIdx<-createDataPartition(dat$price, groups=10, p=0.7, list=F)[,1]
+Y<-dat$price
+X<-subset(dat,select=-price)
+X<-model.matrix(~ . - 1, data=X)
+trainX<-X[trainIdx,]
+trainY<-Y[trainIdx]
+testX<-X[-trainIdx,]
+testY<-Y[-trainIdx]
+```
+
+And the X matrix looks like this:
+
+```{r}
+head(X, 3)
+```
+
+### Train using cv.glmnet
+
+```{r}
+set.seed(123) # ensure the same folds in CV
+cvfit1<-cv.glmnet(trainX, trainY, type.measure = "mse", nfolds=10, alpha=1, family="gaussian", standardize=FALSE)
+```
+
+```{r}
+plot(cvfit1)
+```
+
+The best model has the following metrics:
+
+```{r}
+cvMetricsBest<-data.frame(
+  cvm   =cvfit1$cvm[best],
+  cvsd. =cvfit1$cvsd[best],
+  nzero =cvfit1$nzero[best],
+  lambda=cvfit1$lambda[best]
+)
+kable(cvMetricsBest)
+```
+
+And its coefficients are
+
+```{r}
+coef(cvfit1)
+```
+
+And the performance of the models of different lambdas on the test data is as
+follows (the best model is marked with the dashed line):
+
+```{r}
+assess1<-assess.glmnet(cvfit1, newx=testX, newy=testY, s=cvfit1$lambda)
+plot(assess1$mse ~ cvfit1$lambda, xlab=expression(Log(lambda)), ylab="MSE", log="x", col="red", cex=0.8) # xlim on the original scale
+best<-cvfit1$index["min",]
+abline(v=cvfit1$lambda.min, lty="dashed") # xlim on the original scale
+```
+
+Let's also check the correlation between predicted values and true values:
+
+```{r}
+predictedY<-predict(cvfit1, newx=testX, s="lambda.min")[,"lambda.min"]
+plot(predictedY ~ testY, col="blue", cex=0.8)
+broom::tidy(cor.test(predictedY, testY))
+```
+
+The model's performance looks good, but the issue is that it used all predictors.
+
+### Train using caret
+
+
+```{r}
+# Using caret to perform CV
+cctrl <- trainControl(method="cv", number=10, returnResamp="all")
+set.seed(123) # ensure the same folds in CV
+cvfit2 <- train(trainX, trainY, method = "glmnet", 
+                             trControl = cctrl, metric = "RMSE",
+                             tuneGrid = expand.grid(alpha = 1,
+                                                    lambda = 10^seq(-5,4,by = 0.1)))
+```
+
+```{r}
+plt<-ggplot(cvfit2$results, aes(x=lambda, y = RMSE)) +
+  geom_point(size = 3, color="red") +                          # Add points
+  geom_errorbar(aes(ymin = RMSE-RMSESD, ymax = RMSE+RMSESD),    # Add error bars
+                width = 0.2, color = "black") + 
+  labs(x = "Lambda", y = "RMSE") + scale_x_log10() +
+  theme_minimal()
+plt + geom_vline(xintercept = cvfit2$bestTune$lambda, linetype="dashed", linewidth=0.2)
+```
+
+
+The best parameters are
+
+```{r}
+cvfit2$bestTune
+```
+
+Let's also check the correlation between predicted values and true values:
+
+```{r}
+bestLambda<-cvfit2$bestTune$lambda
+predictedY<-predict(cvfit2$finalModel, newx=testX, s=bestLambda)[,1]
+plot(predictedY ~ testY, col="blue", cex=0.8)
+broom::tidy(cor.test(predictedY, testY))
+```
+
+
