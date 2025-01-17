@@ -1,0 +1,388 @@
+---
+title: "A tutorial on caret"
+author: "Zhenguo Zhang"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    toc: yes
+    toc_depth: '3'
+    df_print: paged
+  github_document:
+    toc: yes
+    toc_depth: 3
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=F, warning = F, fig.width = 7, fig.height = 7)
+library(glmnet)
+library(knitr)
+library(caret)
+library(ggplot2)
+```
+
+In this tutorial, we will explore the features of the R package
+[caret](https://topepo.github.io/caret/).
+
+We will use the [caret::GermanCredit] dataset here, which contains
+a variable `class` giving good and bad credit score as well as
+many predictor variables.
+
+
+```{r}
+data(GermanCredit)
+head(GermanCredit, 2)
+```
+
+## Preprocessing data
+
+First, we split the data into training and testing sets,
+in the ratio 8:2.
+
+```{r}
+Y<-GermanCredit$Class
+X<-subset(GermanCredit, select = -Class)
+trainIdx<-createDataPartition(Y, p=0.8, list=F)[,1]
+trainX<-X[trainIdx,]
+trainY<-Y[trainIdx]
+testX<-X[-trainIdx,]
+testY<-Y[-trainIdx]
+```
+
+
+## Train the model
+
+### default metrics
+
+```{r}
+# 10-fold cross validation
+cvControl<-trainControl(method="cv", number = 10)
+```
+
+```{r}
+set.seed(123)
+cvfit<-train(trainX, 
+             trainY,
+             method = "glmnet",   # Logistic regression model
+             family = "binomial",
+             trControl = cvControl
+)
+```
+
+```{r}
+print(cvfit)
+plot(cvfit)
+```
+
+As you can see, in default, caret uses Accuracy as the performance metric, and uses
+9 tuning parameter combinations. Because it has two tuning parameters, alpha and
+lambda, and each in default has 3 levels, leading to 3x3=9 combinations.
+If we change this by providing `tuneLength=5` to `train()`, then 5x5=25
+combinations will be generated.
+
+And the final model is as follows (note that when fitting the final model,
+glmnet itself uses a new range of lambda, and only alpha value is fixed
+at the value given above):
+
+```{r}
+plot(cvfit$finalModel, xvar="lambda")
+```
+
+### Use AUC as the performance metric
+
+```{r}
+# 10-fold cross validation
+# use twoClassSummary() to compute AUC, for which classProbs must be TRUE
+cvControl<-trainControl(method="cv", number = 10, 
+                        summaryFunction = twoClassSummary, classProbs = T)
+```
+
+```{r}
+set.seed(123)
+cvfit<-train(trainX, 
+             trainY,
+             method = "glmnet",   # Logistic regression model
+             family = "binomial",
+             trControl = cvControl,
+             metric = "ROC"
+)
+```
+
+```{r}
+print(cvfit)
+plot(cvfit)
+```
+And the final model,
+
+```{r}
+plot(cvfit$finalModel, xvar="lambda")
+```
+
+```{r}
+# 10-fold cross validation
+# use twoClassSummary() to compute AUC, for which classProbs must be TRUE
+cvControl<-trainControl(method="cv", number = 10, 
+                        summaryFunction = twoClassSummary, classProbs = T)
+```
+
+```{r}
+set.seed(123)
+cvfit<-train(trainX, 
+             trainY,
+             method = "glmnet",   # Logistic regression model
+             family = "binomial",
+             trControl = cvControl,
+             metric = "ROC"
+)
+```
+
+```{r}
+print(cvfit)
+plot(cvfit)
+```
+
+
+### Set tuning grid
+
+In the above, we have let caret to choose tuning parameters automatically,
+here we will set them manually, and provide them via `tuneGrid` in `train`.
+
+
+```{r}
+# 10-fold cross validation
+# use twoClassSummary() to compute AUC, for which classProbs must be TRUE
+cvControl<-trainControl(method="cv", number = 10, 
+                        summaryFunction = twoClassSummary, classProbs = T)
+
+paramGrid<-expand.grid(alpha=seq(0,1,by=0.2), lambda=10^seq(-10,10,by=2))
+```
+
+```{r}
+set.seed(123)
+cvfit<-train(trainX, 
+             trainY,
+             method = "glmnet",   # Logistic regression model
+             family = "binomial",
+             trControl = cvControl,
+             metric = "ROC",
+             tuneGrid = paramGrid
+)
+```
+
+```{r}
+print(cvfit)
+ggplot(cvfit) + scale_x_log10() + theme_bw()
+```
+In the above plot, the different colors mark different alpha values,
+while the x-axis denotes parameter lambda.
+
+And the best parameters are:
+
+```{r}
+cvfit$bestTune
+```
+
+To plot other metrics, one can provide the argument `metric`, like:
+
+```{r}
+ggplot(cvfit, metric = "Sens") + scale_x_log10() + theme_bw() + geom_vline(xintercept = cvfit$bestTune$lambda, color="red", linetype="dashed")
+```
+
+As you can see, even though the AUC value was good at lambda=1, but the sensitivity
+is pretty bad, caused by imbalanced data.
+
+You can also make heatmap by specifying plot type:
+
+```{r}
+ggplot(cvfit, metric = "Sens", plotType = "level") + theme_bw()
+```
+
+### Choose less complicated model using `tolerance`
+
+```{r}
+# 10-fold cross validation
+# use twoClassSummary() to compute AUC, for which classProbs must be TRUE
+cvControl<-trainControl(method="cv", number = 10, 
+                        summaryFunction = twoClassSummary,
+                        selectionFunction = tolerance,
+                        classProbs = T)
+
+paramGrid<-expand.grid(alpha=seq(0,1,by=0.2), lambda=10^seq(-10,10,by=2))
+```
+
+```{r}
+set.seed(123)
+cvfit<-train(trainX, 
+             trainY,
+             method = "glmnet",   # Logistic regression model
+             family = "binomial",
+             trControl = cvControl,
+             metric = "ROC",
+             tuneGrid = paramGrid
+)
+```
+
+```{r}
+print(cvfit$bestTune)
+```
+As you can see, this time it gets a model with bigger lambda, and thus smaller
+coefficients. Note that most time, it is difficult to define which model is more
+complicated, and in this case, the choice would be arbitrary.
+
+### Predict on new data
+
+One can use `predict.train()` to make predictions based on the fitted model,
+which also automatically takes care of data preprocessing.
+
+```{r}
+pred<-predict(cvfit, newdata = testX)
+confusionMatrix(pred, testY, mode="everything")
+```
+
+As you can see, the sensitivity is 0, and specificity is 1.
+Here positive class is "Bad", to change this, one can provide
+argument 'positive'.
+
+
+
+## Use user models
+
+In addition to use the models built in the caret package, users can also specify
+other models, particularly when the builtin models don't satisfy users' requirements.
+
+In the caret package, the subdirectory models has all the code for each model that train interfaces with and these can be used as prototypes for your model.
+
+To create an SVM model using Laplacian kernel, we will use the *kernlab* ksvm function,
+which has two parameters: standard cost and kernel parameter.
+
+To do so, let's create a list:
+
+```{r}
+# provide basics
+lpSVM<-list(type="Classification",
+            library = "kernlab",
+            loop = NULL)
+# provide parameter data.frame
+prm<-data.frame(
+  parameter = c("C", "sigma"), # parameter names in fit function
+  class = rep("numeric", 2), # parameter types
+  label = c("Cost", "Sigma") # parameter labels
+)
+lpSVM$parameters<-prm
+# provide search grid
+svmGrid<-function(x,y,len = NULL, search="grid") {
+  # it should output a data.frame of tuning parameters with each one on its column
+  # library(kernlab)
+  ## This produces low, middle and high values for sigma 
+  ## (i.e. a vector with 3 elements). 
+  sigmas <- kernlab::sigest(as.matrix(x), na.action = na.omit, scaled = TRUE)
+  # make the data.frame now
+  if(search == "grid") {
+    out <- expand.grid(sigma = mean(as.vector(sigmas[-2])),
+                       C = 2 ^((1:len) - 3))
+  } else {
+    ## For random search, define ranges for the parameters then
+    ## generate random values for them
+    rng <- extendrange(log(sigmas), f = .75)
+    out <- data.frame(sigma = exp(runif(len, min = rng[1], max = rng[2])),
+                      C = 2^runif(len, min = -5, max = 8))
+  }
+  out
+}
+lpSVM$grid<-svmGrid
+# provide fit function
+svmFit <- function(x, y, wts, param, lev, last, weights, classProbs, ...) {
+  # param is a single row data.frame
+  kernlab::ksvm(
+    x = as.matrix(x), y = y,
+    kernel = "rbfdot",
+    kpar = list(sigma = param$sigma),
+    C = param$C,
+    prob.model = classProbs,
+    ...
+    )
+}
+lpSVM$fit<-svmFit
+# provide predict function, produces a vector of predictions
+svmPred <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+   kernlab::predict(modelFit, newdata)
+lpSVM$predict <- svmPred
+# provide prob function, produces a data.frame/matrix with columns being probabilities for each class
+svmProb <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+  kernlab::predict(modelFit, newdata, type = "probabilities")
+lpSVM$prob <- svmProb
+# provide sort function, sort models from simplest to complexest, used when models are tied in performance
+svmSort <- function(x) x[order(x$C),]
+lpSVM$sort <- svmSort
+# provide levels function, gives the levels of the original observations,
+# only needed for classification models using S3 methods
+lpSVM$levels <- function(x) kernlab::lev(x)
+```
+
+Now, let's fit the model.
+
+```{r}
+set.seed(123)
+lpSVMFit<-train(trainX, trainY,
+                method = lpSVM, 
+                tuneLength = 8,
+                trControl = cvControl
+)
+```
+
+```{r}
+print(lpSVMFit)
+```
+
+Also check the model fitting over tuning parameters:
+
+```{r}
+ggplot(lpSVMFit) + scale_x_log10()
+```
+
+Check this [link](https://topepo.github.io/caret/using-your-own-model-in-train.html)
+for more details.
+
+## More on the caret package
+
+### Hyperparamter search
+
+Here are the main approaches
+
+- grid search
+- random search
+
+### Reproducibility
+
+Two sources of randomness:
+
+- resampling
+- modeling
+
+Approaches to ensure reproducibility:
+- set seeds brefore calling train(), ensure the same resampling and modeling when
+  non-parallel processing is used.
+- use the option `seeds` in trainControl() to set seeds for each model training,
+  ensure the same models are achieved, even when using parallel processing.
+- note that some model randomness may be inevitable due to how the randomness
+  is implemented, for example, some packages load random numbers when loaded.
+
+### Important functions
+
+- preProcess: pre-process data before modeling, such as scaling/centering, which
+  can also be customized by users. The preprocessing will be automatically applied
+  by predict.train, extractPrediction or extractProbs, but not to predictions that
+  directly use the object$finalModel object.
+  One can also use the package [recipes](https://recipes.tidymodels.org/)
+  to define user preprocessing function.
+
+- update.train: update/re-fit models using new tuning parameters.
+
+- trainControl: generates parameters for controlling how models are trained,
+  such as the sampling method, what results are returned, used performance
+  metrics (via summaryFunction and selectionFunction), and parallel processing.
+
+
+
+
+## References
