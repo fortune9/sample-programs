@@ -52,6 +52,18 @@ testY<-Y[-trainIdx]
 
 ## Train the model
 
+Note: after selecting best parameters, for final model training, the glmnet
+only takes the alpha value determined by cross-validation, but ignored lambda,
+and the final fit tries a new range of lambda to find the best model.
+This best model is used for making predictions on the new dataset when
+a prediction is made on the object of class *train*.
+
+Also note that the prediction uses the cutoff of probability > 0.5
+to predict the outcome classes.
+
+For training, the first level of a factor is considered as the *positive*
+outcome, so one need to change the factor levels before training if needed.
+
 ### default metrics
 
 ```{r}
@@ -118,11 +130,20 @@ And the final model,
 plot(cvfit$finalModel, xvar="lambda")
 ```
 
+The performance on test data
+
+```{r}
+pred<-predict(cvfit, newdata = testX)
+confusionMatrix(pred, testY, mode="everything")
+```
+
+### Use Kappa as performance metric
+
 ```{r}
 # 10-fold cross validation
 # use twoClassSummary() to compute AUC, for which classProbs must be TRUE
 cvControl<-trainControl(method="cv", number = 10, 
-                        summaryFunction = twoClassSummary, classProbs = T)
+                        summaryFunction = defaultSummary)
 ```
 
 ```{r}
@@ -132,15 +153,60 @@ cvfit<-train(trainX,
              method = "glmnet",   # Logistic regression model
              family = "binomial",
              trControl = cvControl,
-             metric = "ROC"
+             metric = "kappa"
 )
 ```
 
 ```{r}
-print(cvfit)
+kable(cvfit$results)
 plot(cvfit)
 ```
 
+The performance on test data
+
+```{r}
+pred<-predict(cvfit, newdata = testX)
+confusionMatrix(pred, testY, mode="everything")
+```
+
+The model looks slightly better.
+
+
+### Use Precision-Recall AUC as performance metric
+
+```{r}
+# 10-fold cross validation
+# use twoClassSummary() to compute AUC, for which classProbs must be TRUE
+cvControl<-trainControl(method="cv", number = 10, 
+                        summaryFunction = prSummary, classProbs = T)
+```
+
+```{r}
+set.seed(123)
+cvfit<-train(trainX, 
+             trainY,
+             method = "glmnet",   # Logistic regression model
+             family = "binomial",
+             trControl = cvControl,
+             metric = "AUC",
+             tuneLength = 5
+)
+```
+
+```{r}
+kable(cvfit$results)
+plot(cvfit)
+```
+
+The performance on test data
+
+```{r}
+pred<-predict(cvfit, newdata = testX)
+confusionMatrix(pred, testY, mode="everything")
+```
+
+The model is better than the last one in precision and specificity,
+but not so in recall.
 
 ### Set tuning grid
 
@@ -255,7 +321,7 @@ In the caret package, the subdirectory models has all the code for each model th
 To create an SVM model using Laplacian kernel, we will use the *kernlab* ksvm function,
 which has two parameters: standard cost and kernel parameter.
 
-To do so, let's create a list:
+To do so, let's create a list as follows:
 
 ```{r}
 # provide basics
