@@ -19,6 +19,7 @@ library(glmnet)
 library(knitr)
 library(caret)
 library(ggplot2)
+library(ROCR)
 ```
 
 In this tutorial, we will explore the features of the R package
@@ -294,6 +295,148 @@ print(cvfit$bestTune)
 As you can see, this time it gets a model with bigger lambda, and thus smaller
 coefficients. Note that most time, it is difficult to define which model is more
 complicated, and in this case, the choice would be arbitrary.
+
+
+### Use the sensitivity at 90% specificity as performance metric
+
+To do this, we need to define a summary function to use in [trainControl()]
+for calculating needed metrics and to define a selection function to choose
+the best model based on calculated metrics.
+
+Here are the two functions:
+
+```{r}
+customSummary <- function(data, lev = NULL, model = NULL) {
+  # Ensure the data has the correct columns
+  if (!all(c("obs", "pred") %in% names(data))) {
+    stop("The data must contain 'obs' and 'pred' columns.")
+  }
+  
+  # Extract the probabilities for the positive class
+  positive_class <- lev[1]  # First level is assumed to be the positive class
+  stopifnot(positive_class %in% names(data))
+  prob <- data[, positive_class]
+  
+  # Create a prediction object for ROCR
+  pred_obj <- prediction(prob, data$obs, label.ordering = rev(lev))
+  
+  # Calculate the ROC curve
+  perf <- performance(pred_obj, "tpr", "fpr")
+  
+  # Extract specificity and sensitivity values
+  specificity <- 1 - perf@x.values[[1]]  # specificity = 1 - FPR
+  sensitivity <- perf@y.values[[1]]      # sensitivity = TPR
+  
+  # Calculate sensitivity at specificity 90%
+  spec_threshold <- 0.9
+  delta<-specificity - spec_threshold
+  delta<-ifelse(delta < 0, 100, delta) # only consider values >= spec_threshold
+  idx <- which.min(delta)
+  sens_at_spec90 <- sensitivity[idx]
+  
+  # Calculate partial AUC for specificity >= 90%
+  partial_auc<-performance(pred_obj, measure = "auc", fpr.stop=1-spec_threshold)@y.values[[1]]
+  
+  # Return both metrics
+  return(c(PartialAUC = partial_auc, SensAtSpec90 = sens_at_spec90))
+}
+
+# Custom selection function to choose the best model based on a user-defined metric
+customSelection <- function(x, metric, maximize) {
+  # x is a data.frame with tuning parameter and performance metrics in columns.
+  # check the function caret::best() on how it is implemented
+  # Find the row with the best value for the chosen metric
+  if (maximize) {
+    best_index <- which.max(x[, metric])
+  } else {
+    best_index <- which.min(x[, metric])
+  }
+  
+  #best_model <- x[best_index, ]
+  #return(best_model)
+  return(best_index) # should return row index instead
+}
+```
+
+```{r}
+# 10-fold cross validation
+# use twoClassSummary() to compute AUC, for which classProbs must be TRUE
+cvControl<-trainControl(method="cv", number = 10, 
+                        summaryFunction = customSummary,
+                        selectionFunction = customSelection,
+                        classProbs = T,
+                        savePredictions = "final")
+
+paramGrid<-expand.grid(alpha=seq(0,1,by=0.2), lambda=10^seq(-10,10,by=2))
+```
+
+```{r}
+set.seed(123)
+cvfit<-train(trainX, 
+             trainY,
+             method = "glmnet",   # Logistic regression model
+             family = "binomial",
+             trControl = cvControl,
+             metric = "SensAtSpec90",
+             maximize = T,
+             tuneGrid = paramGrid
+)
+```
+
+```{r}
+kable(cvfit$results)
+ggplot(cvfit) + scale_x_log10() + theme_bw()
+```
+
+```{r}
+print(cvfit$bestTune)
+```
+
+
+The performance on test data
+
+```{r}
+pred<-predict(cvfit, newdata = testX)
+confusionMatrix(pred, testY, mode="everything")
+```
+
+
+### Use the partial AUC before 90% specificity as performance metric
+
+Similar to the above, but use partial AUC as selection metric. The good thing
+is that the metric has been computed in the summary function provided above,
+so we just need to change the value for argument *metric*:
+
+```{r}
+set.seed(123)
+cvfit<-train(trainX, 
+             trainY,
+             method = "glmnet",   # Logistic regression model
+             family = "binomial",
+             trControl = cvControl,
+             metric = "PartialAUC",
+             maximize = T,
+             tuneGrid = paramGrid
+)
+```
+
+```{r}
+kable(cvfit$results)
+ggplot(cvfit) + scale_x_log10() + theme_bw()
+```
+
+```{r}
+print(cvfit$bestTune)
+```
+
+
+The performance on test data
+
+```{r}
+pred<-predict(cvfit, newdata = testX)
+confusionMatrix(pred, testY, mode="everything")
+```
+
 
 ### Predict on new data
 
