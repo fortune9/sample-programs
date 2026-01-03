@@ -1,0 +1,11 @@
+name: pulumi-EC2
+description: A python Pulumi program to deploy EC2 instance
+runtime:
+  name: python
+  options:
+    toolchain: pip
+    virtualenv: venv
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: aws-python
